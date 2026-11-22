@@ -48,8 +48,9 @@ class ContentSearchService
                 'url_two'    => $term,
                 'url_three'  => $term,
                 'file_path'  => $term,
+                'file_path_two' => $term,
                 'image_path' => $term,
-                'pdf_path'   => $term,
+                
             ];
 
             try {
@@ -129,7 +130,7 @@ class ContentSearchService
 
         $found = collect();
         foreach ($relativePaths as $relPath) {
-            foreach (['file_path', 'pdf_path'] as $col) {
+            foreach (['file_path','file_path_two'] as $col) {
                 try {
                     $rows = $this->repo->ReturnSearchMany(
                         filters: [],
@@ -379,7 +380,7 @@ class ContentSearchService
                 $lines[] = "URLs: " . implode(', ', $urls);
             }
 
-            foreach (['file_path', 'image_path', 'pdf_path'] as $pathCol) {
+            foreach (['file_path', 'file_path_two','image_path'] as $pathCol) {
                 if (!empty($item->{$pathCol})) {
                     $lines[] = "{$pathCol}: {$item->{$pathCol}}";
                 }
@@ -395,7 +396,7 @@ class ContentSearchService
             $parts[] = ['text' => implode("\n", $lines)];
 
             if ($includeMedia) {
-                foreach (['image_path', 'file_path', 'pdf_path'] as $mediaCol) {
+                foreach (['image_path', 'file_path', 'file_path_two'] as $mediaCol) {
                     $mediaPath = $item->{$mediaCol} ?? null;
                     if (!empty($mediaPath) && !in_array((string) $mediaPath, $attachedPaths, true)) {
                         $attachedPaths[] = (string) $mediaPath;

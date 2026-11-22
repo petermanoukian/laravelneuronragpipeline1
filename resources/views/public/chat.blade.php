@@ -142,7 +142,8 @@
             return;
         }
 
-        const withMedia = sources.filter(s => s && (s.image || s.file || s.url));
+        //const withMedia = sources.filter(s => s && (s.image || s.file || s.url));
+        const withMedia = sources.filter(s => s && (s.image || s.file || s.file_two || s.url));
         if (withMedia.length === 0) {
             mediaBox.classList.add('hidden');
             return;
@@ -181,6 +182,16 @@
                 fLink.className = 'inline-flex items-center bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2.5 py-1 text-xs font-medium';
                 fLink.textContent = 'File: ' + String(item.file).split('/').pop();
                 linksRow.appendChild(fLink);
+            }
+
+            if (item.file_two) {
+                const f2Link = document.createElement('a');
+                f2Link.href = toAssetUrl(item.file_two);
+                f2Link.target = '_blank';
+                f2Link.rel = 'noopener noreferrer';
+                f2Link.className = 'inline-flex items-center bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2.5 py-1 text-xs font-medium';
+                f2Link.textContent = 'File 2: ' + String(item.file_two).split('/').pop();
+                linksRow.appendChild(f2Link);
             }
 
             if (item.url && /^https?:\/\//i.test(item.url)) {

@@ -49,7 +49,7 @@ class ContentChatV2Controller extends Controller
         $threadId = (string) $request->session()->get($sessionKey, '');
         if ($threadId === '') {
             $threadId = 'content-chat-v2-' . Str::uuid();
-            $request->session()->put($sessionKey, $newThreadId);
+            $request->session()->put($sessionKey, $threadId);
         }
 
         $reply = null;

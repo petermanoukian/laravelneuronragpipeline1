@@ -31,10 +31,11 @@ class ContentController extends Controller
     public function add(StoreContentRequest $request): RedirectResponse
     {
         // Controller decides the operational parameters:
-        $imageFolder = 'uploads/content/img';
-        $fileFolder  = 'uploads/content/files';
-        $maxWidth    = 4000;
-        $maxHeight   = 4000;
+        $imageFolder    = 'uploads/content/img';
+        $fileFolder     = 'uploads/content/files';
+        $fileTwoFolder  = 'uploads/content/files';
+        $maxWidth       = 4000;
+        $maxHeight      = 4000;
 
         // Delegate execution to the operational service, passing the controller's decisions
         $content = $this->crudService->createContentEntry(
@@ -42,7 +43,8 @@ class ContentController extends Controller
             $imageFolder,
             $fileFolder,
             $maxWidth,
-            $maxHeight
+            $maxHeight,
+            $fileTwoFolder
         );
 
         return redirect()->back()->with('success', 'Content successfully created with ID: ' . $content->id);

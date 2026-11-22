@@ -55,7 +55,7 @@ class SearchContentsTool extends Tool
         return array_values(static::$capturedSources);
     }
 
-    public function __invoke(string $query): string
+public function __invoke(string $query): string
     {
         $cleanQuery = trim($query);
         if ($cleanQuery === '') {
@@ -63,7 +63,9 @@ class SearchContentsTool extends Tool
         }
 
         $terms = preg_split('/\s+/u', $cleanQuery, -1, PREG_SPLIT_NO_EMPTY) ?: [$cleanQuery];
-        $searchTerms = array_values(array_unique(array_filter(array_merge([$cleanQuery], $terms))));
+        // here perter: expand search terms with AI instead of hardcoded if/else pairs
+        $searchTerms = $this->expandSearchTermsWithAi($cleanQuery, $terms);
+
         $collected = collect();
 
         foreach ($searchTerms as $term) {
@@ -75,8 +77,9 @@ class SearchContentsTool extends Tool
                 'url_two'    => $term,
                 'url_three'  => $term,
                 'file_path'  => $term,
+                'file_path_two' => $term,
                 'image_path' => $term,
-                'pdf_path'   => $term,
+                //'pdf_path'   => $term,
             ];
 
             try {
@@ -125,16 +128,19 @@ class SearchContentsTool extends Tool
                 $item->url_two ?? null,
                 $item->url_three ?? null,
             ]));
-            $file = $item->file_path ?? $item->pdf_path ?? null;
+           //$file = $item->file_path ?? $item->pdf_path ?? null;
+            $file = $item->file_path ?? $item->file_path_two ??  null;
             $image = $item->image_path ?? null;
 
             $sourceKey = 'row:' . ($item->id ?? md5((string) ($item->title ?? '')));
+            // here perter: pass file_two along to captured sources for the chat view
             static::$capturedSources[$sourceKey] = [
-                'id'    => $item->id ?? null,
-                'title' => (string) ($item->title ?? 'Untitled Record'),
-                'url'   => $urls[0] ?? null,
-                'file'  => is_string($file) && $file !== '' ? ltrim($file, '/') : null,
-                'image' => is_string($image) && $image !== '' ? ltrim($image, '/') : null,
+                'id'       => $item->id ?? null,
+                'title'    => (string) ($item->title ?? 'Untitled Record'),
+                'url'      => $urls[0] ?? null,
+                'file'     => is_string($file) && $file !== '' ? ltrim($file, '/') : null,
+                'file_two' => !empty($item->file_path_two) ? ltrim((string) $item->file_path_two, '/') : null,
+                'image'    => is_string($image) && $image !== '' ? ltrim($image, '/') : null,
             ];
 
             $lines = [
@@ -162,6 +168,14 @@ class SearchContentsTool extends Tool
                 }
             }
 
+            if (!empty($item->file_path_two)) {
+                $lines[] = "File 2: {$item->file_path_two}";
+                $docTextTwo = $this->extractStoredFileText((string) $item->file_path_two);
+                if ($docTextTwo !== '') {
+                    $lines[] = "Extracted File 2 Text: " . mb_substr($docTextTwo, 0, 2500);
+                }
+            }
+            /*
             if (!empty($item->pdf_path)) {
                 $lines[] = "PDF: {$item->pdf_path}";
                 $pdfText = $this->extractStoredFileText((string) $item->pdf_path);
@@ -169,7 +183,7 @@ class SearchContentsTool extends Tool
                     $lines[] = "Extracted PDF Text: " . mb_substr($pdfText, 0, 2500);
                 }
             }
-
+            */
             if (!empty($item->image_path)) {
                 $lines[] = "Image: {$item->image_path}";
             }
@@ -201,6 +215,67 @@ class SearchContentsTool extends Tool
         }
 
         return implode("\n---\n", $blocks);
+    }
+
+    // here perter: ask Gemini (cached) for general query term variants
+    protected function expandSearchTermsWithAi(string $cleanQuery, array $baseTerms): array
+    {
+        $terms = array_values(array_unique(array_filter(array_merge([$cleanQuery], $baseTerms))));
+        if (empty($terms)) {
+            return [];
+        }
+
+        $apiKey = (string) config('central.gemini_key', '');
+        $model = (string) config('central.default_model', 'gemini-2.5-flash');
+        if ($apiKey === '') {
+            return $terms;
+        }
+
+        $cacheKey = 'chat_v1_term_variants_' . md5($model . '|' . mb_strtolower($cleanQuery));
+
+        $aiTerms = Cache::remember($cacheKey, now()->addHours(24), function () use ($apiKey, $model, $cleanQuery, $terms) {
+            try {
+                $prompt = "Given the search query and extracted terms, return ONLY a JSON array of up to 8 concise lowercase search keywords/variants "
+                    . "(including equivalent terms, shorter/longer forms, or common variants that might appear inside documents, without unrelated topics).\n"
+                    . "Query: {$cleanQuery}\n"
+                    . "Terms: " . json_encode($terms, JSON_UNESCAPED_UNICODE);
+
+                $res = Http::timeout(5)
+                    ->withHeaders(['x-goog-api-key' => $apiKey])
+                    ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", [
+                        'contents' => [[
+                            'role'  => 'user',
+                            'parts' => [['text' => $prompt]],
+                        ]],
+                        'generationConfig' => [
+                            'temperature' => 0.1,
+                        ],
+                    ]);
+
+                if (!$res->successful()) {
+                    return [];
+                }
+
+                $rawText = (string) data_get($res->json(), 'candidates.0.content.parts.0.text', '');
+                $jsonStr = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($rawText)) ?? '';
+                $decoded = json_decode($jsonStr, true);
+
+                return is_array($decoded) ? $decoded : [];
+            } catch (Throwable) {
+                return [];
+            }
+        });
+
+        foreach ($aiTerms as $variant) {
+            if (is_string($variant)) {
+                $cleanVar = trim(mb_strtolower($variant));
+                if ($cleanVar !== '' && mb_strlen($cleanVar) >= 2 && mb_strlen($cleanVar) <= 60) {
+                    $terms[] = $cleanVar;
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($terms)));
     }
 
     /**

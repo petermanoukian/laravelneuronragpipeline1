@@ -31,5 +31,6 @@ class Content extends Model
         'url_three',
         'file_path',
         'image_path',
+        'file_path_two',
     ];
 }

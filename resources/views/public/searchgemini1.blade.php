@@ -72,7 +72,8 @@
                 @php
                     $imgPath = !empty($item->image_path) ? ltrim((string) $item->image_path, '/') : null;
                     $filePath = !empty($item->file_path) ? ltrim((string) $item->file_path, '/') : null;
-                    $pdfPath = !empty($item->pdf_path) ? ltrim((string) $item->pdf_path, '/') : null;
+                    
+                    $filePathTwo = !empty($item->file_path_two) ? ltrim((string) $item->file_path_two, '/') : null;
                 @endphp
                 <article class="bg-white p-6 rounded-lg shadow-md">
                     <h3 class="text-xl font-bold text-gray-900 mb-2">{{ $item->title }}</h3>
@@ -88,7 +89,7 @@
                         </div>
                     @endif
 
-                    @if($filePath || $pdfPath)
+                    @if($filePath || $filePathTwo )
                         <div class="flex flex-wrap gap-3 mb-3 text-sm">
                             @if($filePath)
                                 <a
@@ -101,16 +102,18 @@
                                 </a>
                             @endif
 
-                            @if($pdfPath)
+                            @if($filePathTwo)
                                 <a
-                                    href="{{ asset($pdfPath) }}"
+                                    href="{{ asset($filePathTwo) }}"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    class="inline-flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 rounded-md px-3 py-1.5 font-medium transition"
+                                    class="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-md px-3 py-1.5 font-medium transition"
                                 >
-                                    PDF: {{ basename($pdfPath) }}
+                                    Attached File 2: {{ basename($filePathTwo) }}
                                 </a>
                             @endif
+
+                     
                         </div>
                     @endif
 

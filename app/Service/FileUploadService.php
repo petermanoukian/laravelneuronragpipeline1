@@ -10,11 +10,16 @@ class FileUploadService
     /**
      * Upload a generic file to the specified public directory with a title slug.
      */
-    public function upload(UploadedFile $file, string $title, string $destinationPath = 'uploads/content/files'): string
-    {
+    public function upload(
+        UploadedFile $file,
+        string $title,
+        string $destinationPath = 'uploads/content/files',
+        string $suffix = ''
+    ): string {
         $titleSlug = Str::slug($title);
-        $fileName = $titleSlug . '-' . time() . '.' . $file->getClientOriginalExtension();
-        
+        $cleanSuffix = $suffix !== '' ? '-' . ltrim($suffix, '-') : '';
+        $fileName = $titleSlug . '-' . time() . $cleanSuffix . '.' . $file->getClientOriginalExtension();
+
         $fullDestination = public_path($destinationPath);
         if (!file_exists($fullDestination)) {
             mkdir($fullDestination, 0755, true);

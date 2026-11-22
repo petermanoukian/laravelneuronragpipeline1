@@ -58,14 +58,15 @@ class CachedSearchContentsTool extends Tool
         return array_values(static::$capturedSources);
     }
 
-    public function __invoke(string $query): string
+public function __invoke(string $query): string
     {
         $cleanQuery = $this->scrubUtf8(trim($query));
         if ($cleanQuery === '') {
             return 'Empty search query provided.';
         }
 
-        $cacheKey = 'neuron_rag_search_v5_' . md5(mb_strtolower($cleanQuery));
+        // here perter: bump cache key version for AI term expansion and file_two support
+        $cacheKey = 'neuron_rag_search_v6_' . md5(mb_strtolower($cleanQuery));
 
         $cachedPayload = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($cleanQuery) {
             $results = $this->runTargetedSearch($cleanQuery);
@@ -86,10 +87,13 @@ class CachedSearchContentsTool extends Tool
                 ], fn ($u) => is_string($u) && trim($u) !== ''));
                 $urls = array_map(fn ($u) => $this->scrubUtf8(trim((string) $u)), $urls);
 
-                $fileRaw = data_get($item, 'file_path') ?? data_get($item, 'pdf_path') ?? data_get($item, 'file');
+                // here perter: read file_path and file_path_two without pdf_path
+                $fileRaw = data_get($item, 'file_path');
+                $fileTwoRaw = data_get($item, 'file_path_two');
                 $imageRaw = data_get($item, 'image_path') ?? data_get($item, 'image');
 
                 $file = is_string($fileRaw) && trim($fileRaw) !== '' ? $this->scrubUtf8(ltrim(trim($fileRaw), '/')) : null;
+                $fileTwo = is_string($fileTwoRaw) && trim($fileTwoRaw) !== '' ? $this->scrubUtf8(ltrim(trim($fileTwoRaw), '/')) : null;
                 $image = is_string($imageRaw) && trim($imageRaw) !== '' ? $this->scrubUtf8(ltrim(trim($imageRaw), '/')) : null;
                 $primaryUrl = $urls[0] ?? null;
 
@@ -101,12 +105,27 @@ class CachedSearchContentsTool extends Tool
                     }
                 }
 
-                $extractedFileText = '';
+                // here perter: extract text from first file, second file, or fallback image
+                $fileTextParts = [];
                 if ($file !== null) {
-                    $extractedFileText = $this->extractStoredFileText($file);
-                } elseif ($image !== null) {
-                    $extractedFileText = $this->extractStoredFileText($image);
+                    $t1 = $this->extractStoredFileText($file);
+                    if ($t1 !== '') {
+                        $fileTextParts[] = $t1;
+                    }
                 }
+                if ($fileTwo !== null) {
+                    $t2 = $this->extractStoredFileText($fileTwo);
+                    if ($t2 !== '') {
+                        $fileTextParts[] = "[File 2] " . $t2;
+                    }
+                }
+                if (empty($fileTextParts) && $image !== null) {
+                    $tImg = $this->extractStoredFileText($image);
+                    if ($tImg !== '') {
+                        $fileTextParts[] = $tImg;
+                    }
+                }
+                $extractedFileText = implode("\n", $fileTextParts);
 
                 $dedupKey = $id !== null ? 'id:' . $id : 'title:' . md5($title);
                 if (isset($records[$dedupKey])) {
@@ -122,6 +141,7 @@ class CachedSearchContentsTool extends Tool
                     'urls'         => $urls,
                     'url_excerpts' => $urlExcerpts,
                     'file'         => $file,
+                    'file_two'     => $fileTwo,
                     'image'        => $image,
                     'file_text'    => $extractedFileText !== '' ? $this->scrubUtf8(mb_substr($extractedFileText, 0, 2500)) : '',
                 ];
@@ -131,7 +151,9 @@ class CachedSearchContentsTool extends Tool
                 }
             }
 
-            $terms = preg_split('/[^\p{L}\p{N}_-]+/u', mb_strtolower($cleanQuery)) ?: [];
+            // here perter: expand file scan terms via cached AI instead of hardcoded pairs
+            $rawTerms = preg_split('/[^\p{L}\p{N}_-]+/u', mb_strtolower($cleanQuery)) ?: [];
+            $terms = $this->expandSearchTermsWithAi($cleanQuery, $rawTerms);
             $matchedFiles = $this->scanStoredFilesForTerms($terms);
 
             foreach ($matchedFiles as $mf) {
@@ -153,6 +175,7 @@ class CachedSearchContentsTool extends Tool
                     'urls'         => [],
                     'url_excerpts' => [],
                     'file'         => $isImg ? null : $rel,
+                    'file_two'     => null,
                     'image'        => $isImg ? $rel : null,
                     'file_text'    => $this->scrubUtf8((string) ($mf['excerpt'] ?? '')),
                 ];
@@ -174,14 +197,16 @@ class CachedSearchContentsTool extends Tool
         foreach ($cachedPayload as $rec) {
             $sourceKey = $rec['id'] !== null
                 ? 'id:' . $rec['id']
-                : ('item:' . md5($rec['title'] . '|' . ($rec['file'] ?? '') . '|' . ($rec['image'] ?? '') . '|' . ($rec['url'] ?? '')));
+                : ('item:' . md5($rec['title'] . '|' . ($rec['file'] ?? '') . '|' . ($rec['file_two'] ?? '') . '|' . ($rec['image'] ?? '') . '|' . ($rec['url'] ?? '')));
 
+            // here perter: include file_two in captured sources
             static::$capturedSources[$sourceKey] = [
-                'id'    => $rec['id'],
-                'title' => $this->scrubUtf8((string) $rec['title']),
-                'url'   => $rec['url'] !== null ? $this->scrubUtf8((string) $rec['url']) : null,
-                'file'  => $rec['file'] !== null ? $this->scrubUtf8((string) $rec['file']) : null,
-                'image' => $rec['image'] !== null ? $this->scrubUtf8((string) $rec['image']) : null,
+                'id'       => $rec['id'],
+                'title'    => $this->scrubUtf8((string) $rec['title']),
+                'url'      => $rec['url'] !== null ? $this->scrubUtf8((string) $rec['url']) : null,
+                'file'     => $rec['file'] !== null ? $this->scrubUtf8((string) $rec['file']) : null,
+                'file_two' => isset($rec['file_two']) && $rec['file_two'] !== null ? $this->scrubUtf8((string) $rec['file_two']) : null,
+                'image'    => $rec['image'] !== null ? $this->scrubUtf8((string) $rec['image']) : null,
             ];
         }
 
@@ -199,11 +224,15 @@ class CachedSearchContentsTool extends Tool
             if ($rec['description'] !== '') {
                 $line .= ": {$rec['description']}";
             }
+            // here perter: use $rec['urls'] outside the Cache::remember closure
             if (!empty($rec['urls'])) {
                 $line .= " | URLs: " . implode(', ', $rec['urls']);
             }
             if (!empty($rec['file'])) {
                 $line .= " | File: {$rec['file']}";
+            }
+            if (!empty($rec['file_two'])) {
+                $line .= " | File 2: {$rec['file_two']}";
             }
             if (!empty($rec['image'])) {
                 $line .= " | Image: {$rec['image']}";
@@ -221,8 +250,12 @@ class CachedSearchContentsTool extends Tool
 
         return $this->scrubUtf8(implode("\n", $lines));
     }
-
     /**
+     * @return iterable<int, mixed>
+     */
+
+
+/**
      * @return iterable<int, mixed>
      */
     protected function runTargetedSearch(string $cleanQuery): iterable
@@ -246,16 +279,17 @@ class CachedSearchContentsTool extends Tool
         };
 
         $searchByTerm = function (string $term) use ($addItems): void {
+            // here perter: search file_path_two instead of pdf_path
             $searchFields = [
-                'title'      => $term,
-                'content'    => $term,
-                'keywords'   => $term,
-                'url_one'    => $term,
-                'url_two'    => $term,
-                'url_three'  => $term,
-                'file_path'  => $term,
-                'image_path' => $term,
-                'pdf_path'   => $term,
+                'title'         => $term,
+                'content'       => $term,
+                'keywords'      => $term,
+                'url_one'       => $term,
+                'url_two'       => $term,
+                'url_three'     => $term,
+                'file_path'     => $term,
+                'file_path_two' => $term,
+                'image_path'    => $term,
             ];
 
             try {
@@ -332,6 +366,9 @@ class CachedSearchContentsTool extends Tool
             return $collected;
         }
 
+        // here perter: expand targeted DB search keywords via AI
+        $keywords = $this->expandSearchTermsWithAi($cleanQuery, $keywords);
+
         foreach ($keywords as $word) {
             $searchByTerm($word);
             if (count($collected) >= 6) {
@@ -341,6 +378,68 @@ class CachedSearchContentsTool extends Tool
 
         return $collected;
     }
+
+    // here perter: cached Gemini term expansion for general query variants/equivalents
+    protected function expandSearchTermsWithAi(string $cleanQuery, array $baseTerms): array
+    {
+        $terms = array_values(array_unique(array_filter(array_merge([$cleanQuery], $baseTerms))));
+        if (empty($terms)) {
+            return [];
+        }
+
+        $apiKey = (string) config('central.gemini_key', '');
+        $model = (string) config('central.default_model', 'gemini-2.5-flash');
+        if ($apiKey === '') {
+            return $terms;
+        }
+
+        $cacheKey = 'cached_search_term_variants_' . md5($model . '|' . mb_strtolower($cleanQuery));
+
+        $aiTerms = Cache::remember($cacheKey, now()->addHours(24), function () use ($apiKey, $model, $cleanQuery, $terms) {
+            try {
+                $prompt = "Given the search query and extracted terms, return ONLY a JSON array of up to 8 concise lowercase search keywords/variants "
+                    . "(including equivalent terms, shorter/longer forms, or common variants that might appear inside documents, without unrelated topics).\n"
+                    . "Query: {$cleanQuery}\n"
+                    . "Terms: " . json_encode($terms, JSON_UNESCAPED_UNICODE);
+
+                $res = Http::timeout(5)
+                    ->withHeaders(['x-goog-api-key' => $apiKey])
+                    ->post("https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent", [
+                        'contents' => [[
+                            'role'  => 'user',
+                            'parts' => [['text' => $prompt]],
+                        ]],
+                        'generationConfig' => [
+                            'temperature' => 0.1,
+                        ],
+                    ]);
+
+                if (!$res->successful()) {
+                    return [];
+                }
+
+                $rawText = (string) data_get($res->json(), 'candidates.0.content.parts.0.text', '');
+                $jsonStr = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($rawText)) ?? '';
+                $decoded = json_decode($jsonStr, true);
+
+                return is_array($decoded) ? $decoded : [];
+            } catch (Throwable) {
+                return [];
+            }
+        });
+
+        foreach ($aiTerms as $variant) {
+            if (is_string($variant)) {
+                $cleanVar = trim(mb_strtolower($variant));
+                if ($cleanVar !== '' && mb_strlen($cleanVar) >= 2 && mb_strlen($cleanVar) <= 60) {
+                    $terms[] = $cleanVar;
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($terms)));
+    }
+
 
     /**
      * @param  array<int, string>  $terms

@@ -74,19 +74,28 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="grid grid-cols-3 gap-4 mb-6">
             <div>
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="file_path">Generic File (PDF, Image, Text, JSON, HTML, DOC, DOCX)</label>
-                <input class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
-                       id="file_path" type="file" name="file_path" 
-                       accept="application/pdf,image/*,.txt,application/json,text/html,.doc,.docx">
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="file_path">
+                    Generic File (PDF, Image, Text, MD, JSON, HTML, DOC, DOCX, RTF, CSV, XLS, XLSX)</label>
+                <input class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    id="file_path" type="file" name="file_path"
+                    accept="application/pdf,image/*,.txt,.md,text/markdown,application/json,text/html,.doc,.docx,.rtf,.csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/rtf,text/rtf">
+            </div>
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="file_path_two">
+                    Second Optional File (PDF, Image, Text, MD, JSON, HTML, DOC, DOCX, RTF, CSV, XLS, XLSX)</label>
+                <input class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    id="file_path_two" type="file" name="file_path_two"
+                    accept="application/pdf,image/*,.txt,.md,text/markdown,application/json,text/html,.doc,.docx,.rtf,.csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,application/rtf,text/rtf">
             </div>
             <div>
                 <label class="block text-gray-700 text-sm font-bold mb-2" for="image_path">Image Only</label>
-                <input class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
-                       id="image_path" type="file" name="image_path" accept="image/*">
+                <input class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    id="image_path" type="file" name="image_path" accept="image/*">
             </div>
         </div>
+
 
         <div class="flex items-center justify-end">
             <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline transition" type="submit">

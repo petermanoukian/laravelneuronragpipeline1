@@ -26,11 +26,12 @@ class ContentCrudService
      * Operational execution using the parameters decided by the controller.
      */
     public function createContentEntry(
-        array $validatedData, 
-        string $imageFolder, 
-        string $fileFolder, 
-        int $maxWidth, 
-        int $maxHeight
+        array $validatedData,
+        string $imageFolder,
+        string $fileFolder,
+        int $maxWidth,
+        int $maxHeight,
+        string $fileTwoFolder = 'uploads/content/files'
     ): Model {
         $title = $validatedData['title'] ?? 'content';
 
@@ -38,8 +39,8 @@ class ContentCrudService
         if (isset($validatedData['image_path']) && $validatedData['image_path'] instanceof UploadedFile) {
             $customImageService = new ImageUploadService($maxWidth, $maxHeight);
             $validatedData['image_path'] = $customImageService->upload(
-                $validatedData['image_path'], 
-                $title, 
+                $validatedData['image_path'],
+                $title,
                 $imageFolder
             );
         }
@@ -47,9 +48,19 @@ class ContentCrudService
         // 2. Handle Generic File Upload using controller-defined folder
         if (isset($validatedData['file_path']) && $validatedData['file_path'] instanceof UploadedFile) {
             $validatedData['file_path'] = $this->fileService->upload(
-                $validatedData['file_path'], 
-                $title, 
+                $validatedData['file_path'],
+                $title,
                 $fileFolder
+            );
+        }
+
+        // 2b. Handle Second Optional File Upload with distinct suffix
+        if (isset($validatedData['file_path_two']) && $validatedData['file_path_two'] instanceof UploadedFile) {
+            $validatedData['file_path_two'] = $this->fileService->upload(
+                $validatedData['file_path_two'],
+                $title,
+                $fileTwoFolder,
+                '2'
             );
         }
 

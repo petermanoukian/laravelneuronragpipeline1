@@ -181,6 +181,17 @@
                 chipsWrap.appendChild(fLink);
             }
 
+            // here perter: render second file link when present
+            if (src.file_two) {
+                const f2Link = document.createElement('a');
+                f2Link.href = toAssetUrl(src.file_two);
+                f2Link.target = '_blank';
+                f2Link.rel = 'noopener noreferrer';
+                f2Link.className = 'inline-flex items-center text-xs bg-gray-50 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-md px-2.5 py-1 font-medium transition';
+                f2Link.textContent = 'File 2: ' + String(src.file_two).split('/').pop();
+                chipsWrap.appendChild(f2Link);
+            }
+
             if (src.image) {
                 const imgBox = document.createElement('div');
                 imgBox.className = 'w-full pt-1';
