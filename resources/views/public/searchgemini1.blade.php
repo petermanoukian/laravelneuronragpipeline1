@@ -41,12 +41,78 @@
         </div>
     @endif
 
+    @if(!empty($matchedFiles))
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-sm font-bold uppercase tracking-wider text-gray-700 mb-3">Matched Stored Files</h2>
+            <div class="space-y-2">
+                @foreach($matchedFiles as $mf)
+                    @php
+                        $rel = ltrim((string) ($mf['relative_path'] ?? ''), '/');
+                        $fileUrl = asset($rel);
+                    @endphp
+                    <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-lg px-4 py-2.5 text-sm">
+                        <div>
+                            <span class="font-semibold text-gray-900">{{ $mf['filename'] ?? basename($rel) }}</span>
+                            <span class="text-xs text-gray-500 ml-2">({{ strtoupper($mf['extension'] ?? '') }})</span>
+                        </div>
+                        @if($rel !== '')
+                            <a href="{{ $fileUrl }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-medium">
+                                Open File
+                            </a>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     @if(isset($results))
         <div class="space-y-4">
             @forelse($results as $item)
+                @php
+                    $imgPath = !empty($item->image_path) ? ltrim((string) $item->image_path, '/') : null;
+                    $filePath = !empty($item->file_path) ? ltrim((string) $item->file_path, '/') : null;
+                    $pdfPath = !empty($item->pdf_path) ? ltrim((string) $item->pdf_path, '/') : null;
+                @endphp
                 <article class="bg-white p-6 rounded-lg shadow-md">
                     <h3 class="text-xl font-bold text-gray-900 mb-2">{{ $item->title }}</h3>
                     <p class="text-gray-700 whitespace-pre-line mb-3">{{ $item->content }}</p>
+
+                    @if($imgPath)
+                        <div class="mb-4">
+                            <img
+                                src="{{ asset($imgPath) }}"
+                                alt="{{ $item->title }}"
+                                class="max-h-64 rounded-lg border border-gray-200 object-contain"
+                            >
+                        </div>
+                    @endif
+
+                    @if($filePath || $pdfPath)
+                        <div class="flex flex-wrap gap-3 mb-3 text-sm">
+                            @if($filePath)
+                                <a
+                                    href="{{ asset($filePath) }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-md px-3 py-1.5 font-medium transition"
+                                >
+                                    Attached File: {{ basename($filePath) }}
+                                </a>
+                            @endif
+
+                            @if($pdfPath)
+                                <a
+                                    href="{{ asset($pdfPath) }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="inline-flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-800 border border-red-200 rounded-md px-3 py-1.5 font-medium transition"
+                                >
+                                    PDF: {{ basename($pdfPath) }}
+                                </a>
+                            @endif
+                        </div>
+                    @endif
 
                     @if(!empty($item->keywords))
                         <div class="flex flex-wrap gap-2 mb-3">

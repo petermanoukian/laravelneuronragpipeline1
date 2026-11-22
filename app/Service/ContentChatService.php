@@ -4,6 +4,7 @@ namespace App\Service;
 
 use App\Models\NeuronChatMessage;
 use App\Neuron\Agents\ContentRagAgent;
+use App\Neuron\Tools\SearchContentsTool;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -24,11 +25,21 @@ class ContentChatService
      * Send a user message for a thread, trying the chosen/chat model first
      * and falling back if overloaded/timed out.
      *
-     * @return array{threadId: string, reply: string, modelUsed: string, messages: Collection}
+     * @return array{
+     *     threadId: string,
+     *     reply: string,
+     *     modelUsed: string,
+     *     sources: array<int, array{id: int|string|null, title: string, url: ?string, file: ?string, image: ?string}>,
+     *     messages: Collection
+     * }
      */
     public function sendMessage(string $threadId, string $message, ?string $requestedModel = null): array
     {
         $this->agent->setThreadId($threadId);
+
+        if (method_exists(SearchContentsTool::class, 'resetCapturedSources')) {
+            SearchContentsTool::resetCapturedSources();
+        }
 
         $primaryModel = $requestedModel ?: (string) config('central.chat_model', 'gemini-3.8-flash');
         $fallbackRaw = (string) config('central.chat_fallback_models', '');
@@ -67,11 +78,15 @@ class ContentChatService
         }
 
         $replyText = $this->extractReplyFromState($response);
+        $sources = method_exists(SearchContentsTool::class, 'getCapturedSources')
+            ? SearchContentsTool::getCapturedSources()
+            : [];
 
         return [
             'threadId'  => $threadId,
             'reply'     => $replyText,
             'modelUsed' => $usedModel,
+            'sources'   => $sources,
             'messages'  => $this->getThreadMessages($threadId),
         ];
     }

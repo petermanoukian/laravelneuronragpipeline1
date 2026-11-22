@@ -35,7 +35,7 @@ class ContentChatV2Controller extends Controller
             $request->session()->put($sessionKey, $newThreadId);
 
             if ($request->expectsJson() || $request->ajax()) {
-                return response()->json([
+                return $this->cleanJsonResponse([
                     'ok'       => true,
                     'threadId' => $newThreadId,
                     'messages' => [],
@@ -49,7 +49,7 @@ class ContentChatV2Controller extends Controller
         $threadId = (string) $request->session()->get($sessionKey, '');
         if ($threadId === '') {
             $threadId = 'content-chat-v2-' . Str::uuid();
-            $request->session()->put($sessionKey, $threadId);
+            $request->session()->put($sessionKey, $newThreadId);
         }
 
         $reply = null;
@@ -81,7 +81,7 @@ class ContentChatV2Controller extends Controller
                     || str_contains(strtolower($e->getMessage()), 'timeout');
 
                 if ($isTransient && ($request->expectsJson() || $request->ajax())) {
-                    return response()->json([
+                    return $this->cleanJsonResponse([
                         'ok'      => false,
                         'message' => 'Chat model is temporarily busy or timed out. Please try again or switch models.',
                     ], 503);
@@ -90,19 +90,24 @@ class ContentChatV2Controller extends Controller
                 throw $e;
             }
 
-            $reply = $payload['reply'];
-            $sources = $payload['sources'] ?? [];
-            $modelUsed = $payload['modelUsed'] ?? $requestedModel;
+            $reply = $this->sanitizeUtf8(trim((string) ($payload['reply'] ?? '')));
+            $sources = $this->sanitizeUtf8($payload['sources'] ?? []);
+            $modelUsed = $this->sanitizeUtf8($payload['modelUsed'] ?? $requestedModel);
             $messages = $payload['messages'];
+            $formattedMessages = $this->formatMessagesForJson($messages);
+
+            if ($reply === '' && empty($formattedMessages)) {
+                $reply = 'No text reply was returned by the model for this turn. Please try rephrasing or switching models.';
+            }
 
             if ($request->expectsJson() || $request->ajax()) {
-                return response()->json([
+                return $this->cleanJsonResponse([
                     'ok'        => true,
                     'threadId'  => $payload['threadId'],
                     'modelUsed' => $modelUsed,
                     'reply'     => $reply,
                     'sources'   => $sources,
-                    'messages'  => $this->formatMessagesForJson($messages),
+                    'messages'  => $formattedMessages,
                 ]);
             }
         } else {
@@ -150,7 +155,7 @@ class ContentChatV2Controller extends Controller
                 $text = $msg->message;
             }
 
-            $text = trim($text);
+            $text = $this->sanitizeUtf8(trim($text));
 
             if ($text !== '' && in_array($role, ['user', 'assistant', 'model'], true)) {
                 $formatted[] = [
@@ -161,5 +166,37 @@ class ContentChatV2Controller extends Controller
         }
 
         return $formatted;
+    }
+
+    protected function cleanJsonResponse(array $data, int $status = 200): JsonResponse
+    {
+        $cleaned = $this->sanitizeUtf8($data);
+
+        return response()->json($cleaned, $status, [], JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+
+    protected function sanitizeUtf8(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            foreach ($value as $k => $v) {
+                $value[$k] = $this->sanitizeUtf8($v);
+            }
+            return $value;
+        }
+
+        if (!is_string($value) || $value === '') {
+            return $value;
+        }
+
+        if (function_exists('mb_scrub')) {
+            $clean = mb_scrub($value, 'UTF-8');
+        } elseif (function_exists('iconv')) {
+            $converted = @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+            $clean = $converted !== false ? $converted : preg_replace('/[^\x09\x0A\x0D\x20-\x7E\x{80}-\x{10FFFF}]/u', '', $value) ?? '';
+        } else {
+            $clean = preg_replace('/[^\x09\x0A\x0D\x20-\x7E\x{80}-\x{10FFFF}]/u', '', $value) ?? '';
+        }
+
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $clean) ?? $clean;
     }
 }

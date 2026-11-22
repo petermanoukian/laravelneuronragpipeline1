@@ -102,6 +102,7 @@
 <script>
 (function () {
     const chatUrl = @json(route('public.contents.chat.v2'));
+    const baseAssetUrl = @json(asset('/'));
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
         || document.querySelector('#chat-v2-form input[name="_token"]')?.value;
 
@@ -128,39 +129,72 @@
         document.getElementById('chat-v2-pending-bubble')?.remove();
     }
 
+    function toAssetUrl(relPath) {
+        if (!relPath) return null;
+        if (/^https?:\/\//i.test(relPath)) return relPath;
+        return baseAssetUrl.replace(/\/+$/, '') + '/' + String(relPath).replace(/^\/+/, '');
+    }
+
     function buildSourcesElement(sources) {
         if (!Array.isArray(sources) || sources.length === 0) {
             return null;
         }
 
         const container = document.createElement('div');
-        container.className = 'mt-3 pt-3 border-t border-gray-300/70 flex flex-wrap gap-2';
+        container.className = 'mt-3 pt-3 border-t border-gray-300/70 space-y-2.5';
 
-        const heading = document.createElement('span');
-        heading.className = 'w-full text-[11px] font-semibold uppercase tracking-wider text-gray-500';
-        heading.textContent = 'Sources';
+        const heading = document.createElement('div');
+        heading.className = 'text-[11px] font-semibold uppercase tracking-wider text-gray-500';
+        heading.textContent = 'Sources & Attachments';
         container.appendChild(heading);
+
+        const chipsWrap = document.createElement('div');
+        chipsWrap.className = 'flex flex-wrap gap-2';
 
         sources.forEach(src => {
             const label = src.id !== null && src.id !== undefined
                 ? `#${src.id} — ${src.title || 'Record'}`
                 : (src.title || 'Record');
 
-            if (src.url) {
+            if (src.url && /^https?:\/\//i.test(src.url)) {
                 const link = document.createElement('a');
                 link.href = src.url;
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
                 link.className = 'inline-flex items-center text-xs bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-md px-2.5 py-1 transition';
                 link.textContent = label;
-                container.appendChild(link);
+                chipsWrap.appendChild(link);
             } else {
                 const chip = document.createElement('span');
                 chip.className = 'inline-flex items-center text-xs bg-white text-gray-700 border border-gray-200 rounded-md px-2.5 py-1';
-                chip.textContent = src.file ? `${label} (${src.file})` : label;
-                container.appendChild(chip);
+                chip.textContent = src.file ? `${label} (${String(src.file).split('/').pop()})` : label;
+                chipsWrap.appendChild(chip);
+            }
+
+            if (src.file) {
+                const fLink = document.createElement('a');
+                fLink.href = toAssetUrl(src.file);
+                fLink.target = '_blank';
+                fLink.rel = 'noopener noreferrer';
+                fLink.className = 'inline-flex items-center text-xs bg-gray-50 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-md px-2.5 py-1 font-medium transition';
+                fLink.textContent = 'File: ' + String(src.file).split('/').pop();
+                chipsWrap.appendChild(fLink);
+            }
+
+            if (src.image) {
+                const imgBox = document.createElement('div');
+                imgBox.className = 'w-full pt-1';
+
+                const img = document.createElement('img');
+                img.src = toAssetUrl(src.image);
+                img.alt = src.title || 'Attached image';
+                img.className = 'max-h-48 rounded-lg border border-gray-200 object-contain bg-white';
+                imgBox.appendChild(img);
+                container.appendChild(imgBox);
             }
         });
+
+        container.insertBefore(chipsWrap, container.firstChild.nextSibling);
 
         return container;
     }

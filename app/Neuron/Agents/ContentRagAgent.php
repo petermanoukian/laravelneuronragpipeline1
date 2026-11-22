@@ -21,7 +21,7 @@ class ContentRagAgent extends Agent
         ?string $model = null
     ) {
         $this->contentRepo = $contentRepo;
-        $this->modelName = $model ?: (string) config('central.chat_model', 'gemini-3.8-flash');
+        $this->modelName = $model ?: (string) config('central.chat_model', 'gemini-2.5-flash');
     }
 
     public function setModel(string $model): static
@@ -44,14 +44,15 @@ class ContentRagAgent extends Agent
     protected function instructions(): string
     {
         return <<<'PROMPT'
-You are a helpful RAG assistant for a Laravel content knowledge base.
-You have access to the search_contents tool to look up records from the database.
+You are a RAG assistant for a Laravel content knowledge base stored in the `contents` table.
+You MUST call `search_contents` to retrieve records from the database before answering questions about company info, profile, about, services, topics, links, files, or stored records.
 
-Guidelines:
-1. Use search_contents whenever the user asks about stored content, topics, services, links, or files.
-2. Synthesize accurate, concise answers strictly grounded in the tool output and earlier conversation context.
-3. If no matching records are found, say so clearly without fabricating facts.
-4. Respond clearly in the same language as the user, and mention relevant record titles, IDs, or links when helpful.
+Rules:
+1. Always call `search_contents` with relevant keywords (such as "company", "about", or "services") whenever the user asks about the company, profile, offerings, or stored content.
+2. Answer using the records, URLs, and file contents returned by `search_contents` and prior conversation context. Do not say "I am an AI assistant. I don't have a company of my own" when matching database records exist.
+3. Mention relevant record titles, IDs, or links when helpful.
+4. Only state that no matching records were found if `search_contents` returns no matching records.
+5. Respond in the same language as the user.
 PROMPT;
     }
 

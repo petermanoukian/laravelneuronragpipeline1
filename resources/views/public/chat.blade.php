@@ -12,11 +12,11 @@
                 id="chat-model-select"
                 class="text-sm border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-                <option value="" selected>Default ({{ config('central.chat_model', 'gemini-1.5-pro') }})</option>
-                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                <option value="" selected>Default ({{ config('central.chat_model', 'gemini-2.5-flash') }})</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
                 <option value="gemini-3.8-flash">gemini-3.8-flash</option>
                 <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
-                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
             </select>
 
             <form id="reset-chat-form" method="POST" action="{{ route('public.contents.chat') }}">
@@ -47,7 +47,7 @@
                         if (is_string($part)) {
                             $text .= $part . "\n";
                         } elseif (is_array($part) && isset($part['text'])) {
-                            $text .= $part['text'] . "\n";
+                            $text .= (string) $part['text'] . "\n";
                         }
                     }
                 } elseif (is_string($rawPayload['content'] ?? null)) {
@@ -75,6 +75,8 @@
         @endforelse
     </div>
 
+    <div id="chat-v1-media" class="hidden bg-white rounded-lg shadow-md p-4 mb-6 space-y-3"></div>
+
     <form id="chat-form" method="POST" action="{{ route('public.contents.chat') }}" class="bg-white p-4 rounded-lg shadow-md flex gap-3">
         @csrf
         <input
@@ -99,6 +101,7 @@
 <script>
 (function () {
     const chatUrl = @json(route('public.contents.chat'));
+    const baseAssetUrl = @json(asset('/'));
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
         || document.querySelector('#chat-form input[name="_token"]')?.value;
 
@@ -109,6 +112,7 @@
     const submitBtn = document.getElementById('chat-submit-btn');
     const resetBtn = document.getElementById('reset-chat-btn');
     const messagesBox = document.getElementById('chat-messages');
+    const mediaBox = document.getElementById('chat-v1-media');
     const errorBox = document.getElementById('chat-error-box');
 
     function showError(msg) {
@@ -123,6 +127,80 @@
 
     function removePendingBubble() {
         document.getElementById('chat-pending-bubble')?.remove();
+    }
+
+    function toAssetUrl(relPath) {
+        if (!relPath) return null;
+        if (/^https?:\/\//i.test(relPath)) return relPath;
+        return baseAssetUrl.replace(/\/+$/, '') + '/' + String(relPath).replace(/^\/+/, '');
+    }
+
+    function renderMediaAttachments(sources) {
+        mediaBox.innerHTML = '';
+        if (!Array.isArray(sources) || sources.length === 0) {
+            mediaBox.classList.add('hidden');
+            return;
+        }
+
+        const withMedia = sources.filter(s => s && (s.image || s.file || s.url));
+        if (withMedia.length === 0) {
+            mediaBox.classList.add('hidden');
+            return;
+        }
+
+        const heading = document.createElement('div');
+        heading.className = 'text-xs font-bold uppercase tracking-wider text-gray-600';
+        heading.textContent = 'Matched Files, Images & Links';
+        mediaBox.appendChild(heading);
+
+        withMedia.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'border border-gray-200 rounded-lg p-3 space-y-2 text-sm';
+
+            const titleEl = document.createElement('div');
+            titleEl.className = 'font-semibold text-gray-900';
+            titleEl.textContent = item.title || 'Matched Record';
+            row.appendChild(titleEl);
+
+            if (item.image) {
+                const img = document.createElement('img');
+                img.src = toAssetUrl(item.image);
+                img.alt = item.title || 'Attached image';
+                img.className = 'max-h-48 rounded border border-gray-200 object-contain';
+                row.appendChild(img);
+            }
+
+            const linksRow = document.createElement('div');
+            linksRow.className = 'flex flex-wrap gap-3';
+
+            if (item.file) {
+                const fLink = document.createElement('a');
+                fLink.href = toAssetUrl(item.file);
+                fLink.target = '_blank';
+                fLink.rel = 'noopener noreferrer';
+                fLink.className = 'inline-flex items-center bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2.5 py-1 text-xs font-medium';
+                fLink.textContent = 'File: ' + String(item.file).split('/').pop();
+                linksRow.appendChild(fLink);
+            }
+
+            if (item.url && /^https?:\/\//i.test(item.url)) {
+                const uLink = document.createElement('a');
+                uLink.href = item.url;
+                uLink.target = '_blank';
+                uLink.rel = 'noopener noreferrer';
+                uLink.className = 'text-blue-600 hover:underline text-xs';
+                uLink.textContent = item.url;
+                linksRow.appendChild(uLink);
+            }
+
+            if (linksRow.childNodes.length > 0) {
+                row.appendChild(linksRow);
+            }
+
+            mediaBox.appendChild(row);
+        });
+
+        mediaBox.classList.remove('hidden');
     }
 
     function appendBubble(role, text, id = null, badgeText = null) {
@@ -235,6 +313,8 @@
             } else {
                 showError('Empty response received from server.');
             }
+
+            renderMediaAttachments(data.sources || []);
         } catch (err) {
             removePendingBubble();
             if (err.name === 'AbortError') {
@@ -260,6 +340,7 @@
         try {
             await postJson({ reset: true });
             renderAllMessages([]);
+            renderMediaAttachments([]);
         } catch (err) {
             showError(err.message || 'Could not reset chat.');
         } finally {

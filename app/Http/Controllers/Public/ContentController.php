@@ -2,19 +2,15 @@
 
 namespace App\Http\Controllers\Public;
 
-
-
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SearchContentRequest;
 use App\Service\ContentChatService;
 use App\Service\ContentSearchService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
-use Illuminate\Http\JsonResponse;
-
-
 
 class ContentController extends Controller
 {
@@ -41,8 +37,8 @@ class ContentController extends Controller
             return view('public.searchgemini1');
         }
 
-        // Controller defines operational RAG parameters
-        $maxContextItems = 5;
+        // Include up to 20 context items for Gemini synthesis
+        $maxContextItems = 20;
         $model = config('central.default_model');
         $temperature = 0.2;
         $includeMedia = true;
@@ -58,9 +54,10 @@ class ContentController extends Controller
         );
 
         return view('public.searchgemini1', [
-            'results'  => $payload['results'],
-            'aiAnswer' => $payload['aiAnswer'],
-            'query'    => $query,
+            'results'      => $payload['results'],
+            'aiAnswer'     => $payload['aiAnswer'],
+            'matchedFiles' => $payload['matchedFiles'] ?? [],
+            'query'        => $query,
         ]);
     }
 
@@ -81,6 +78,7 @@ class ContentController extends Controller
                     'ok'       => true,
                     'threadId' => $newThreadId,
                     'messages' => [],
+                    'sources'  => [],
                 ]);
             }
 
@@ -120,6 +118,7 @@ class ContentController extends Controller
                     'threadId'  => $payload['threadId'],
                     'modelUsed' => $payload['modelUsed'] ?? $requestedModel,
                     'reply'     => $reply,
+                    'sources'   => $payload['sources'] ?? [],
                     'messages'  => $this->formatMessagesForJson($messages),
                 ]);
             }
@@ -178,12 +177,4 @@ class ContentController extends Controller
 
         return $formatted;
     }
-
-    /**
-     * Normalize stored NeuronChatMessage rows into simple {role, text} items for JSON responses.
-     *
-     * @param  \Illuminate\Support\Collection<int, mixed>  $messages
-     * @return array<int, array{role: string, text: string}>
-     */
-    
 }

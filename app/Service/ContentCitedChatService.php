@@ -101,8 +101,17 @@ class ContentCitedChatService
             throw $lastException ?? new \RuntimeException('All configured chat models failed to respond.');
         }
 
+        $messages = $this->getThreadMessages($threadId);
         $replyText = $this->extractReplyFromState($state);
+        if ($replyText === '') {
+            $replyText = $this->extractLatestAssistantTextFromMessages($messages);
+        }
+
         $sources = CachedSearchContentsTool::getCapturedSources();
+        if ($replyText === '' && !empty($sources)) {
+            $titles = array_map(fn ($s) => (string) ($s['title'] ?? 'Record'), $sources);
+            $replyText = 'Found matching records in the knowledge base: ' . implode(', ', $titles) . '.';
+        }
 
         Log::info('ChatV2 done', [
             'thread_id'  => $threadId,
@@ -115,8 +124,38 @@ class ContentCitedChatService
             'reply'     => $replyText,
             'modelUsed' => $usedModel,
             'sources'   => $sources,
-            'messages'  => $this->getThreadMessages($threadId),
+            'messages'  => $messages,
         ];
+    }
+
+    /**
+     * @param  Collection<int, NeuronChatMessage>  $messages
+     */
+    protected function extractLatestAssistantTextFromMessages(Collection $messages): string
+    {
+        foreach ($messages->reverse() as $msg) {
+            $rawPayload = is_string($msg->message)
+                ? json_decode($msg->message, true)
+                : (array) ($msg->message ?? []);
+
+            $role = (string) ($rawPayload['role'] ?? ($msg->role ?? ''));
+            if (!in_array($role, ['assistant', 'model'], true)) {
+                continue;
+            }
+
+            $content = $rawPayload['content'] ?? null;
+            if (is_string($content) && trim($content) !== '') {
+                return trim($content);
+            }
+            if (is_array($content)) {
+                $flat = $this->flattenContentParts($content);
+                if ($flat !== '') {
+                    return $flat;
+                }
+            }
+        }
+
+        return '';
     }
 
     /**
