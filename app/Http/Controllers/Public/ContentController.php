@@ -28,7 +28,7 @@ class ContentController extends Controller
     /**
      * Handle GET (initial page load) and POST (search submission) for public RAG search.
      */
-    public function searchgemini1(SearchContentRequest $request): View
+public function searchgemini1(SearchContentRequest $request): View
     {
         $validated = $request->validated();
         $query = trim((string) ($validated['q'] ?? ''));
@@ -53,32 +53,38 @@ class ContentController extends Controller
             $maxInlineBytes
         );
 
+        // here perter: pass standaloneFiles separately so the view can render them in their own section
         return view('public.searchgemini1', [
-            'results'      => $payload['results'],
-            'aiAnswer'     => $payload['aiAnswer'],
-            'matchedFiles' => $payload['matchedFiles'] ?? [],
-            'query'        => $query,
+            'results'         => $payload['results'],
+            'aiAnswer'        => $payload['aiAnswer'],
+            'matchedFiles'    => $payload['matchedFiles'] ?? [],
+            'standaloneFiles' => $payload['standaloneFiles'] ?? [],
+            'query'           => $query,
         ]);
     }
 
     public function chat(Request $request): View|RedirectResponse|JsonResponse
     {
         $sessionKey = 'neuron_content_chat_thread_id';
+        $filesSessionKey = 'neuron_content_chat_standalone_files_' . md5((string) $request->session()->get($sessionKey, 'default'));
 
         if ($request->boolean('reset')) {
             $oldThreadId = (string) $request->session()->get($sessionKey, '');
             if ($oldThreadId !== '') {
                 $this->chatService->clearThread($oldThreadId);
             }
+            $request->session()->forget('neuron_content_chat_standalone_files_' . md5($oldThreadId));
+
             $newThreadId = 'content-chat-' . Str::uuid();
             $request->session()->put($sessionKey, $newThreadId);
 
             if ($request->expectsJson() || $request->ajax()) {
                 return response()->json([
-                    'ok'       => true,
-                    'threadId' => $newThreadId,
-                    'messages' => [],
-                    'sources'  => [],
+                    'ok'              => true,
+                    'threadId'        => $newThreadId,
+                    'messages'        => [],
+                    'sources'         => [],
+                    'standaloneFiles' => [],
                 ]);
             }
 
@@ -91,7 +97,9 @@ class ContentController extends Controller
             $request->session()->put($sessionKey, $threadId);
         }
 
+        $filesSessionKey = 'neuron_content_chat_standalone_files_' . md5($threadId);
         $reply = null;
+        $standaloneFiles = (array) $request->session()->get($filesSessionKey, []);
 
         if ($request->isMethod('post')) {
             $validated = $request->validate([
@@ -111,15 +119,19 @@ class ContentController extends Controller
 
             $reply = $payload['reply'];
             $messages = $payload['messages'];
+            // here perter: keep standalone files2 separate from DB/tool sources in chat responses
+            $standaloneFiles = $payload['standaloneFiles'] ?? [];
+            $request->session()->put($filesSessionKey, $standaloneFiles);
 
             if ($request->expectsJson() || $request->ajax()) {
                 return response()->json([
-                    'ok'        => true,
-                    'threadId'  => $payload['threadId'],
-                    'modelUsed' => $payload['modelUsed'] ?? $requestedModel,
-                    'reply'     => $reply,
-                    'sources'   => $payload['sources'] ?? [],
-                    'messages'  => $this->formatMessagesForJson($messages),
+                    'ok'              => true,
+                    'threadId'        => $payload['threadId'],
+                    'modelUsed'       => $payload['modelUsed'] ?? $requestedModel,
+                    'reply'           => $reply,
+                    'sources'         => $payload['sources'] ?? [],
+                    'standaloneFiles' => $standaloneFiles,
+                    'messages'        => $this->formatMessagesForJson($messages),
                 ]);
             }
         } else {
@@ -127,9 +139,10 @@ class ContentController extends Controller
         }
 
         return view('public.chat', [
-            'threadId' => $threadId,
-            'messages' => $messages,
-            'reply'    => $reply,
+            'threadId'        => $threadId,
+            'messages'        => $messages,
+            'reply'           => $reply,
+            'standaloneFiles' => $standaloneFiles,
         ]);
     }
 

@@ -25,6 +25,8 @@ class ContentSearchService
      *
      * @return array{results: Collection, aiAnswer: ?string, matchedFiles: array<int, array<string, mixed>>}
      */
+
+
     public function searchWithRag(
         string $query,
         int $maxContextItems = 5,
@@ -89,10 +91,21 @@ class ContentSearchService
         // Deduplicate by primary key while keeping order
         $results = $collected->unique('id')->values();
 
-        // Also scan stored files (PDFs, docs, text files) for matching query terms
-        $matchedFiles = $this->findMatchingStoredFiles($searchTerms, $maxInlineBytes);
+        // Scan stored files (including uploads/content/files2) for matching query terms
+        $scannedFiles = $this->findMatchingStoredFiles($searchTerms, $maxInlineBytes);
 
-        // If a matched file corresponds to an existing DB row's file_path/pdf_path, ensure it's included
+        // here perter: separate standalone files2 matches from standard matched files for dedicated UI section
+        $standaloneFiles = array_values(array_filter(
+            $scannedFiles,
+            static fn (array $f): bool => ($f['is_files2'] ?? false) === true
+        ));
+
+        $matchedFiles = array_values(array_filter(
+            $scannedFiles,
+            static fn (array $f): bool => ($f['is_files2'] ?? false) !== true
+        ));
+
+        // If a matched file corresponds to an existing DB row's file_path/file_path_two, ensure it's included
         if (!empty($matchedFiles)) {
             $matchedRelPaths = array_column($matchedFiles, 'relative_path');
             $extraRows = $this->findRowsByFilePaths($matchedRelPaths);
@@ -102,10 +115,12 @@ class ContentSearchService
         }
 
         $contextItems = $results->take($maxContextItems);
+        $allContextFiles = array_merge($matchedFiles, $standaloneFiles);
+
         $aiAnswer = $this->generateGeminiAnswer(
             $cleanQuery,
             $contextItems,
-            $matchedFiles,
+            $allContextFiles,
             $model,
             $temperature,
             $includeMedia,
@@ -113,11 +128,14 @@ class ContentSearchService
         );
 
         return [
-            'results'      => $results,
-            'aiAnswer'     => $aiAnswer,
-            'matchedFiles' => $matchedFiles,
+            'results'         => $results,
+            'aiAnswer'        => $aiAnswer,
+            'matchedFiles'    => $matchedFiles,
+            'standaloneFiles' => $standaloneFiles,
         ];
-    }
+    } 
+
+
 
     /**
      * Find DB rows whose file_path or pdf_path matches any of the discovered file paths.
@@ -158,7 +176,7 @@ class ContentSearchService
      * @param  array<int, string>  $terms
      * @return array<int, array<string, mixed>>
      */
-    protected function findMatchingStoredFiles(array $terms, int $maxInlineBytes): array
+protected function findMatchingStoredFiles(array $terms, int $maxInlineBytes): array
     {
         $meaningfulTerms = array_values(array_filter($terms, function (string $t): bool {
             $low = mb_strtolower(trim($t));
@@ -195,6 +213,10 @@ class ContentSearchService
                 }
 
                 $relPath = $this->toRelativeStoragePath($fullPath);
+                $normRelPath = ltrim(str_replace('\\', '/', $relPath), '/');
+                // here perter: flag files located in uploads/content/files2
+                $isFiles2 = str_starts_with($normRelPath, 'uploads/content/files2/');
+
                 $haystackName = mb_strtolower($fileInfo->getFilename() . ' ' . $relPath);
 
                 $matchedTerm = null;
@@ -226,10 +248,11 @@ class ContentSearchService
                         'full_path'     => $fullPath,
                         'extension'     => $ext,
                         'matched_term'  => $matchedTerm,
+                        'is_files2'     => $isFiles2,
                         'excerpt'       => $extractedText !== '' ? mb_substr($extractedText, 0, 4000) : '',
                     ];
 
-                    if (count($matches) >= 5) {
+                    if (count($matches) >= 10) {
                         break 2;
                     }
                 }

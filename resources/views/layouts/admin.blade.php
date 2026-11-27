@@ -14,8 +14,9 @@
                 <span class="text-xl font-bold text-gray-800">RAG V2 Admin</span>
             </div>
             <nav class="p-4 space-y-2">
-                <a href="{{ route('admin.index') }}" class="block px-4 py-2 rounded text-gray-700 hover:bg-blue-50 hover:text-blue-600 font-medium">Dashboard</a>
+                <a href="{{ route('admin.contents.viewfiles') }}" class="block px-4 py-2 rounded text-gray-700 hover:bg-blue-50 hover:text-blue-600 font-medium">Content</a>
                 <a href="{{ route('admin.contents.create') }}" class="block px-4 py-2 rounded text-gray-700 hover:bg-blue-50 hover:text-blue-600 font-medium">Add Content</a>
+                <a href="{{ route('admin.contents.files.create') }}" class="block px-4 py-2 rounded text-gray-700 hover:bg-blue-50 hover:text-blue-600 font-medium">Upload Files</a>
             </nav>
         </div>
         <div class="p-4 border-t">

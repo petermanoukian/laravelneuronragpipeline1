@@ -41,16 +41,50 @@
         </div>
     @endif
 
-    @if(!empty($matchedFiles))
+    @php
+        $allMatchedFiles = array_merge(
+            is_array($matchedFiles ?? null) ? $matchedFiles : [],
+            is_array($standaloneFiles ?? null) ? $standaloneFiles : []
+        );
+        $standardFiles = array_values(array_filter($allMatchedFiles, fn ($mf) => empty($mf['is_files2'])));
+        $newFiles2 = array_values(array_filter($allMatchedFiles, fn ($mf) => !empty($mf['is_files2'])));
+    @endphp
+
+    @if(!empty($standardFiles))
         <div class="bg-white p-6 rounded-lg shadow-md mb-6">
             <h2 class="text-sm font-bold uppercase tracking-wider text-gray-700 mb-3">Matched Stored Files</h2>
             <div class="space-y-2">
-                @foreach($matchedFiles as $mf)
+                @foreach($standardFiles as $mf)
                     @php
                         $rel = ltrim((string) ($mf['relative_path'] ?? ''), '/');
                         $fileUrl = asset($rel);
                     @endphp
                     <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-lg px-4 py-2.5 text-sm">
+                        <div>
+                            <span class="font-semibold text-gray-900">{{ $mf['filename'] ?? basename($rel) }}</span>
+                            <span class="text-xs text-gray-500 ml-2">({{ strtoupper($mf['extension'] ?? '') }})</span>
+                        </div>
+                        @if($rel !== '')
+                            <a href="{{ $fileUrl }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline font-medium">
+                                Open File
+                            </a>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
+    @if(!empty($newFiles2))
+        <div class="bg-white p-6 rounded-lg shadow-md border-2 border-blue-500 mb-6">
+            <h1 class="text-2xl font-bold text-blue-700 mb-3">Free Files (files2)</h1>
+            <div class="space-y-2">
+                @foreach($newFiles2 as $mf)
+                    @php
+                        $rel = ltrim((string) ($mf['relative_path'] ?? ''), '/');
+                        $fileUrl = asset($rel);
+                    @endphp
+                    <div class="flex items-center justify-between gap-4 border border-blue-300 rounded-lg px-4 py-2.5 text-sm">
                         <div>
                             <span class="font-semibold text-gray-900">{{ $mf['filename'] ?? basename($rel) }}</span>
                             <span class="text-xs text-gray-500 ml-2">({{ strtoupper($mf['extension'] ?? '') }})</span>
@@ -75,7 +109,7 @@
                     
                     $filePathTwo = !empty($item->file_path_two) ? ltrim((string) $item->file_path_two, '/') : null;
                 @endphp
-                <article class="bg-white p-6 rounded-lg shadow-md">
+                <article class="bg-white p-6 rounded-lg shadow-md border-2 border-red-500">
                     <h3 class="text-xl font-bold text-gray-900 mb-2">{{ $item->title }}</h3>
                     <p class="text-gray-700 whitespace-pre-line mb-3">{{ $item->content }}</p>
 

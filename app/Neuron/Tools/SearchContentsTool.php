@@ -55,7 +55,7 @@ class SearchContentsTool extends Tool
         return array_values(static::$capturedSources);
     }
 
-public function __invoke(string $query): string
+    public function __invoke(string $query): string
     {
         $cleanQuery = trim($query);
         if ($cleanQuery === '') {
@@ -128,8 +128,8 @@ public function __invoke(string $query): string
                 $item->url_two ?? null,
                 $item->url_three ?? null,
             ]));
-           //$file = $item->file_path ?? $item->pdf_path ?? null;
-            $file = $item->file_path ?? $item->file_path_two ??  null;
+            //$file = $item->file_path ?? $item->pdf_path ?? null;
+            $file = $item->file_path ?? $item->file_path_two ?? null;
             $image = $item->image_path ?? null;
 
             $sourceKey = 'row:' . ($item->id ?? md5((string) ($item->title ?? '')));
@@ -195,18 +195,21 @@ public function __invoke(string $query): string
             $rel = ltrim((string) $mf['relative_path'], '/');
             $ext = strtolower((string) ($mf['extension'] ?? ''));
             $isImg = in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true);
+            // here perter: flag standalone files2 items in captured sources
+            $isFiles2 = !empty($mf['is_files2']);
 
             $sourceKey = 'file:' . md5($rel);
             static::$capturedSources[$sourceKey] = [
-                'id'    => null,
-                'title' => (string) $mf['filename'],
-                'url'   => null,
-                'file'  => $isImg ? null : $rel,
-                'image' => $isImg ? $rel : null,
+                'id'       => null,
+                'title'    => (string) $mf['filename'],
+                'url'      => null,
+                'file'     => $isImg ? null : $rel,
+                'image'    => $isImg ? $rel : null,
+                'is_files2' => $isFiles2,
             ];
 
             $fLines = [
-                "Matched File: {$mf['filename']} ({$rel})",
+                ($isFiles2 ? "Matched Free File (files2): " : "Matched File: ") . "{$mf['filename']} ({$rel})",
             ];
             if (!empty($mf['excerpt'])) {
                 $fLines[] = "Extracted File Text: " . mb_substr((string) $mf['excerpt'], 0, 2500);
@@ -215,6 +218,99 @@ public function __invoke(string $query): string
         }
 
         return implode("\n---\n", $blocks);
+    }
+
+    /**
+     * @param  array<int, string>  $terms
+     * @return array<int, array<string, mixed>>
+     */
+
+    protected function scanStoredFilesForTerms(array $terms): array
+    {
+        $stopWords = [
+            'your', 'the', 'and', 'for', 'with', 'from',
+            'do', 'does', 'did', 'you', 'yu', 'are', 'is', 'was', 'were',
+            'can', 'could', 'would', 'should', 'will', 'what', 'how', 'why',
+            'work', 'works', 'working', 'use', 'using', 'used',
+        ];
+
+        $meaningful = array_values(array_filter($terms, function (string $t) use ($stopWords): bool {
+            $low = mb_strtolower(trim($t));
+            return $low !== '' && mb_strlen($low) >= 2 && !in_array($low, $stopWords, true);
+        }));
+
+        if (empty($meaningful)) {
+            return [];
+        }
+
+        $dirs = [
+            public_path('uploads'),
+            storage_path('app/public'),
+        ];
+
+        $exts = ['pdf', 'docx', 'txt', 'md', 'csv', 'json', 'html', 'log', 'jpg', 'jpeg', 'png', 'webp', 'gif'];
+        $found = [];
+
+        foreach ($dirs as $dir) {
+            if (!File::isDirectory($dir)) {
+                continue;
+            }
+
+            foreach (File::allFiles($dir) as $fileInfo) {
+                $ext = strtolower($fileInfo->getExtension());
+                if (!in_array($ext, $exts, true)) {
+                    continue;
+                }
+                if ($fileInfo->getSize() === 0 || $fileInfo->getSize() > 10 * 1024 * 1024) {
+                    continue;
+                }
+
+                $fullPath = $fileInfo->getPathname();
+                $relPath = $this->toRelativePath($fullPath);
+                $normRelPath = ltrim(str_replace('\\', '/', $relPath), '/');
+                // here perter: mark files inside uploads/content/files2
+                $isFiles2 = str_starts_with($normRelPath, 'uploads/content/files2/');
+                $nameHaystack = mb_strtolower($fileInfo->getFilename() . ' ' . $relPath);
+
+                $matched = false;
+                foreach ($meaningful as $term) {
+                    if (mb_strpos($nameHaystack, mb_strtolower($term)) !== false) {
+                        $matched = true;
+                        break;
+                    }
+                }
+
+                $excerpt = '';
+                if (!$matched && !in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
+                    $excerpt = $this->extractFileTextByPath($fullPath, $ext);
+                    if ($excerpt !== '') {
+                        $textHaystack = mb_strtolower($excerpt);
+                        foreach ($meaningful as $term) {
+                            if (mb_strpos($textHaystack, mb_strtolower($term)) !== false) {
+                                $matched = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if ($matched) {
+                    $found[] = [
+                        'filename'      => $fileInfo->getFilename(),
+                        'relative_path' => $relPath,
+                        'extension'     => $ext,
+                        'is_files2'     => $isFiles2,
+                        'excerpt'       => $excerpt,
+                    ];
+
+                    if (count($found) >= 5) {
+                        break 2;
+                    }
+                }
+            }
+        }
+
+        return $found;
     }
 
     // here perter: ask Gemini (cached) for general query term variants
@@ -282,82 +378,7 @@ public function __invoke(string $query): string
      * @param  array<int, string>  $terms
      * @return array<int, array<string, string>>
      */
-    protected function scanStoredFilesForTerms(array $terms): array
-    {
-        $meaningful = array_values(array_filter($terms, function (string $t): bool {
-            $low = mb_strtolower(trim($t));
-            return $low !== '' && mb_strlen($low) >= 2 && !in_array($low, ['your', 'the', 'and', 'for', 'with', 'from'], true);
-        }));
 
-        if (empty($meaningful)) {
-            return [];
-        }
-
-        $dirs = [
-            public_path('uploads'),
-            storage_path('app/public'),
-        ];
-
-        $exts = ['pdf', 'docx', 'txt', 'md', 'csv', 'json', 'html', 'log', 'jpg', 'jpeg', 'png', 'webp', 'gif'];
-        $found = [];
-
-        foreach ($dirs as $dir) {
-            if (!File::isDirectory($dir)) {
-                continue;
-            }
-
-            foreach (File::allFiles($dir) as $fileInfo) {
-                $ext = strtolower($fileInfo->getExtension());
-                if (!in_array($ext, $exts, true)) {
-                    continue;
-                }
-                if ($fileInfo->getSize() === 0 || $fileInfo->getSize() > 10 * 1024 * 1024) {
-                    continue;
-                }
-
-                $fullPath = $fileInfo->getPathname();
-                $relPath = $this->toRelativePath($fullPath);
-                $nameHaystack = mb_strtolower($fileInfo->getFilename() . ' ' . $relPath);
-
-                $matched = false;
-                foreach ($meaningful as $term) {
-                    if (mb_strpos($nameHaystack, mb_strtolower($term)) !== false) {
-                        $matched = true;
-                        break;
-                    }
-                }
-
-                $excerpt = '';
-                if (!$matched && !in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true)) {
-                    $excerpt = $this->extractFileTextByPath($fullPath, $ext);
-                    if ($excerpt !== '') {
-                        $textHaystack = mb_strtolower($excerpt);
-                        foreach ($meaningful as $term) {
-                            if (mb_strpos($textHaystack, mb_strtolower($term)) !== false) {
-                                $matched = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if ($matched) {
-                    $found[] = [
-                        'filename'      => $fileInfo->getFilename(),
-                        'relative_path' => $relPath,
-                        'extension'     => $ext,
-                        'excerpt'       => $excerpt,
-                    ];
-
-                    if (count($found) >= 5) {
-                        break 2;
-                    }
-                }
-            }
-        }
-
-        return $found;
-    }
 
     protected function extractStoredFileText(string $relativePath): string
     {

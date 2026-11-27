@@ -141,73 +141,118 @@
         }
 
         const container = document.createElement('div');
-        container.className = 'mt-3 pt-3 border-t border-gray-300/70 space-y-2.5';
+        container.className = 'mt-3 pt-3 border-t border-gray-300/70 space-y-3';
 
-        const heading = document.createElement('div');
-        heading.className = 'text-[11px] font-semibold uppercase tracking-wider text-gray-500';
-        heading.textContent = 'Sources & Attachments';
-        container.appendChild(heading);
+        const dbSources = sources.filter(src => src && !src.is_files2);
+        const freeFiles = sources.filter(src => src && Boolean(src.is_files2));
 
-        const chipsWrap = document.createElement('div');
-        chipsWrap.className = 'flex flex-wrap gap-2';
+        if (dbSources.length > 0) {
+            const dbBox = document.createElement('div');
+            dbBox.className = 'border-2 border-red-500 rounded-lg p-3 bg-white space-y-2';
 
-        sources.forEach(src => {
-            const label = src.id !== null && src.id !== undefined
-                ? `#${src.id} — ${src.title || 'Record'}`
-                : (src.title || 'Record');
+            const heading = document.createElement('div');
+            heading.className = 'text-[11px] font-semibold uppercase tracking-wider text-red-700';
+            heading.textContent = 'Sources & Attachments';
+            dbBox.appendChild(heading);
 
-            if (src.url && /^https?:\/\//i.test(src.url)) {
-                const link = document.createElement('a');
-                link.href = src.url;
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                link.className = 'inline-flex items-center text-xs bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-md px-2.5 py-1 transition';
-                link.textContent = label;
-                chipsWrap.appendChild(link);
-            } else {
-                const chip = document.createElement('span');
-                chip.className = 'inline-flex items-center text-xs bg-white text-gray-700 border border-gray-200 rounded-md px-2.5 py-1';
-                chip.textContent = src.file ? `${label} (${String(src.file).split('/').pop()})` : label;
-                chipsWrap.appendChild(chip);
-            }
+            const chipsWrap = document.createElement('div');
+            chipsWrap.className = 'flex flex-wrap gap-2';
 
-            if (src.file) {
-                const fLink = document.createElement('a');
-                fLink.href = toAssetUrl(src.file);
-                fLink.target = '_blank';
-                fLink.rel = 'noopener noreferrer';
-                fLink.className = 'inline-flex items-center text-xs bg-gray-50 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-md px-2.5 py-1 font-medium transition';
-                fLink.textContent = 'File: ' + String(src.file).split('/').pop();
-                chipsWrap.appendChild(fLink);
-            }
+            dbSources.forEach(src => {
+                const label = src.id !== null && src.id !== undefined
+                    ? `#${src.id} — ${src.title || 'Record'}`
+                    : (src.title || 'Record');
 
-            // here perter: render second file link when present
-            if (src.file_two) {
-                const f2Link = document.createElement('a');
-                f2Link.href = toAssetUrl(src.file_two);
-                f2Link.target = '_blank';
-                f2Link.rel = 'noopener noreferrer';
-                f2Link.className = 'inline-flex items-center text-xs bg-gray-50 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-md px-2.5 py-1 font-medium transition';
-                f2Link.textContent = 'File 2: ' + String(src.file_two).split('/').pop();
-                chipsWrap.appendChild(f2Link);
-            }
+                if (src.url && /^https?:\/\//i.test(src.url)) {
+                    const link = document.createElement('a');
+                    link.href = src.url;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.className = 'inline-flex items-center text-xs bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-md px-2.5 py-1 transition';
+                    link.textContent = label;
+                    chipsWrap.appendChild(link);
+                } else {
+                    const chip = document.createElement('span');
+                    chip.className = 'inline-flex items-center text-xs bg-white text-gray-700 border border-gray-200 rounded-md px-2.5 py-1';
+                    chip.textContent = src.file ? `${label} (${String(src.file).split('/').pop()})` : label;
+                    chipsWrap.appendChild(chip);
+                }
 
-            if (src.image) {
-                const imgBox = document.createElement('div');
-                imgBox.className = 'w-full pt-1';
+                if (src.file) {
+                    const fLink = document.createElement('a');
+                    fLink.href = toAssetUrl(src.file);
+                    fLink.target = '_blank';
+                    fLink.rel = 'noopener noreferrer';
+                    fLink.className = 'inline-flex items-center text-xs bg-gray-50 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-md px-2.5 py-1 font-medium transition';
+                    fLink.textContent = 'File: ' + String(src.file).split('/').pop();
+                    chipsWrap.appendChild(fLink);
+                }
 
-                const img = document.createElement('img');
-                img.src = toAssetUrl(src.image);
-                img.alt = src.title || 'Attached image';
-                img.className = 'max-h-48 rounded-lg border border-gray-200 object-contain bg-white';
-                imgBox.appendChild(img);
-                container.appendChild(imgBox);
-            }
-        });
+                // here perter: render second file link when present
+                if (src.file_two) {
+                    const f2Link = document.createElement('a');
+                    f2Link.href = toAssetUrl(src.file_two);
+                    f2Link.target = '_blank';
+                    f2Link.rel = 'noopener noreferrer';
+                    f2Link.className = 'inline-flex items-center text-xs bg-gray-50 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded-md px-2.5 py-1 font-medium transition';
+                    f2Link.textContent = 'File 2: ' + String(src.file_two).split('/').pop();
+                    chipsWrap.appendChild(f2Link);
+                }
 
-        container.insertBefore(chipsWrap, container.firstChild.nextSibling);
+                if (src.image) {
+                    const imgBox = document.createElement('div');
+                    imgBox.className = 'w-full pt-1';
 
-        return container;
+                    const img = document.createElement('img');
+                    img.src = toAssetUrl(src.image);
+                    img.alt = src.title || 'Attached image';
+                    img.className = 'max-h-48 rounded-lg border border-gray-200 object-contain bg-white';
+                    imgBox.appendChild(img);
+                    dbBox.appendChild(imgBox);
+                }
+            });
+
+            dbBox.appendChild(chipsWrap);
+            container.appendChild(dbBox);
+        }
+
+        // here perter: render free files (files2) in their own blue-bordered section with an H1
+        if (freeFiles.length > 0) {
+            const freeBox = document.createElement('div');
+            freeBox.className = 'border-2 border-blue-500 rounded-lg p-3 bg-white space-y-2';
+
+            const freeHeading = document.createElement('h1');
+            freeHeading.className = 'text-lg font-bold text-blue-700';
+            freeHeading.textContent = 'Free Files (files2)';
+            freeBox.appendChild(freeHeading);
+
+            freeFiles.forEach(src => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between gap-2 border border-blue-300 rounded-md px-2.5 py-1.5 text-xs';
+
+                const titleEl = document.createElement('span');
+                titleEl.className = 'font-medium text-gray-900';
+                titleEl.textContent = src.title || String(src.file || src.image || '').split('/').pop();
+                row.appendChild(titleEl);
+
+                const assetPath = src.file || src.image;
+                if (assetPath) {
+                    const link = document.createElement('a');
+                    link.href = toAssetUrl(assetPath);
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.className = 'text-blue-600 hover:underline font-medium';
+                    link.textContent = 'Open File';
+                    row.appendChild(link);
+                }
+
+                freeBox.appendChild(row);
+            });
+
+            container.appendChild(freeBox);
+        }
+
+        return container.childNodes.length > 0 ? container : null;
     }
 
     function appendBubble(role, text, id = null, badgeText = null, sources = []) {
@@ -335,10 +380,20 @@
             const data = await postJson(payload);
             removePendingBubble();
 
+            // here perter: merge standaloneFiles into the assistant bubble sources so buildSourcesElement renders the blue section
+            const combinedSources = [
+                ...(Array.isArray(data.sources) ? data.sources : []),
+                ...(Array.isArray(data.standaloneFiles) ? data.standaloneFiles.map(sf => ({
+                    title: sf.filename || String(sf.relative_path || '').split('/').pop(),
+                    file: sf.relative_path || null,
+                    is_files2: true,
+                })) : []),
+            ];
+
             if (Array.isArray(data.messages) && data.messages.length > 0) {
-                renderAllMessages(data.messages, data.reply, data.modelUsed || chosenModel || null, data.sources || []);
+                renderAllMessages(data.messages, data.reply, data.modelUsed || chosenModel || null, combinedSources);
             } else if (data.reply) {
-                appendBubble('assistant', data.reply, null, data.modelUsed || chosenModel || null, data.sources || []);
+                appendBubble('assistant', data.reply, null, data.modelUsed || chosenModel || null, combinedSources);
             } else {
                 showError('Empty response received from server.');
             }

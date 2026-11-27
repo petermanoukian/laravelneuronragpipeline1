@@ -142,74 +142,113 @@
             return;
         }
 
-        //const withMedia = sources.filter(s => s && (s.image || s.file || s.url));
         const withMedia = sources.filter(s => s && (s.image || s.file || s.file_two || s.url));
         if (withMedia.length === 0) {
             mediaBox.classList.add('hidden');
             return;
         }
 
-        const heading = document.createElement('div');
-        heading.className = 'text-xs font-bold uppercase tracking-wider text-gray-600';
-        heading.textContent = 'Matched Files, Images & Links';
-        mediaBox.appendChild(heading);
+        const dbSources = withMedia.filter(s => !s.is_files2);
+        const freeFiles = withMedia.filter(s => Boolean(s.is_files2));
 
-        withMedia.forEach(item => {
-            const row = document.createElement('div');
-            row.className = 'border border-gray-200 rounded-lg p-3 space-y-2 text-sm';
+        if (dbSources.length > 0) {
+            const heading = document.createElement('div');
+            heading.className = 'text-xs font-bold uppercase tracking-wider text-gray-600';
+            heading.textContent = 'Matched Files, Images & Links';
+            mediaBox.appendChild(heading);
 
-            const titleEl = document.createElement('div');
-            titleEl.className = 'font-semibold text-gray-900';
-            titleEl.textContent = item.title || 'Matched Record';
-            row.appendChild(titleEl);
+            dbSources.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'border-2 border-red-500 rounded-lg p-3 space-y-2 text-sm';
 
-            if (item.image) {
-                const img = document.createElement('img');
-                img.src = toAssetUrl(item.image);
-                img.alt = item.title || 'Attached image';
-                img.className = 'max-h-48 rounded border border-gray-200 object-contain';
-                row.appendChild(img);
-            }
+                const titleEl = document.createElement('div');
+                titleEl.className = 'font-semibold text-gray-900';
+                titleEl.textContent = item.title || 'Matched Record';
+                row.appendChild(titleEl);
 
-            const linksRow = document.createElement('div');
-            linksRow.className = 'flex flex-wrap gap-3';
+                if (item.image) {
+                    const img = document.createElement('img');
+                    img.src = toAssetUrl(item.image);
+                    img.alt = item.title || 'Attached image';
+                    img.className = 'max-h-48 rounded border border-gray-200 object-contain';
+                    row.appendChild(img);
+                }
 
-            if (item.file) {
-                const fLink = document.createElement('a');
-                fLink.href = toAssetUrl(item.file);
-                fLink.target = '_blank';
-                fLink.rel = 'noopener noreferrer';
-                fLink.className = 'inline-flex items-center bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2.5 py-1 text-xs font-medium';
-                fLink.textContent = 'File: ' + String(item.file).split('/').pop();
-                linksRow.appendChild(fLink);
-            }
+                const linksRow = document.createElement('div');
+                linksRow.className = 'flex flex-wrap gap-3';
 
-            if (item.file_two) {
-                const f2Link = document.createElement('a');
-                f2Link.href = toAssetUrl(item.file_two);
-                f2Link.target = '_blank';
-                f2Link.rel = 'noopener noreferrer';
-                f2Link.className = 'inline-flex items-center bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2.5 py-1 text-xs font-medium';
-                f2Link.textContent = 'File 2: ' + String(item.file_two).split('/').pop();
-                linksRow.appendChild(f2Link);
-            }
+                if (item.file) {
+                    const fLink = document.createElement('a');
+                    fLink.href = toAssetUrl(item.file);
+                    fLink.target = '_blank';
+                    fLink.rel = 'noopener noreferrer';
+                    fLink.className = 'inline-flex items-center bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2.5 py-1 text-xs font-medium';
+                    fLink.textContent = 'File: ' + String(item.file).split('/').pop();
+                    linksRow.appendChild(fLink);
+                }
 
-            if (item.url && /^https?:\/\//i.test(item.url)) {
-                const uLink = document.createElement('a');
-                uLink.href = item.url;
-                uLink.target = '_blank';
-                uLink.rel = 'noopener noreferrer';
-                uLink.className = 'text-blue-600 hover:underline text-xs';
-                uLink.textContent = item.url;
-                linksRow.appendChild(uLink);
-            }
+                if (item.file_two) {
+                    const f2Link = document.createElement('a');
+                    f2Link.href = toAssetUrl(item.file_two);
+                    f2Link.target = '_blank';
+                    f2Link.rel = 'noopener noreferrer';
+                    f2Link.className = 'inline-flex items-center bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 rounded px-2.5 py-1 text-xs font-medium';
+                    f2Link.textContent = 'File 2: ' + String(item.file_two).split('/').pop();
+                    linksRow.appendChild(f2Link);
+                }
 
-            if (linksRow.childNodes.length > 0) {
-                row.appendChild(linksRow);
-            }
+                if (item.url && /^https?:\/\//i.test(item.url)) {
+                    const uLink = document.createElement('a');
+                    uLink.href = item.url;
+                    uLink.target = '_blank';
+                    uLink.rel = 'noopener noreferrer';
+                    uLink.className = 'text-blue-600 hover:underline text-xs';
+                    uLink.textContent = item.url;
+                    linksRow.appendChild(uLink);
+                }
 
-            mediaBox.appendChild(row);
-        });
+                if (linksRow.childNodes.length > 0) {
+                    row.appendChild(linksRow);
+                }
+
+                mediaBox.appendChild(row);
+            });
+        }
+
+        if (freeFiles.length > 0) {
+            const freeSection = document.createElement('div');
+            freeSection.className = 'border-2 border-blue-500 rounded-lg p-3 space-y-2';
+
+            const freeHeading = document.createElement('h1');
+            freeHeading.className = 'text-xl font-bold text-blue-700';
+            freeHeading.textContent = 'Free Files (files2)';
+            freeSection.appendChild(freeHeading);
+
+            freeFiles.forEach(item => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between gap-3 border border-blue-300 rounded-lg px-3 py-2 text-sm';
+
+                const titleEl = document.createElement('span');
+                titleEl.className = 'font-semibold text-gray-900';
+                titleEl.textContent = item.title || String(item.file || item.image || '').split('/').pop();
+                row.appendChild(titleEl);
+
+                const assetPath = item.file || item.image;
+                if (assetPath) {
+                    const link = document.createElement('a');
+                    link.href = toAssetUrl(assetPath);
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.className = 'text-blue-600 hover:underline text-xs font-medium';
+                    link.textContent = 'Open File';
+                    row.appendChild(link);
+                }
+
+                freeSection.appendChild(row);
+            });
+
+            mediaBox.appendChild(freeSection);
+        }
 
         mediaBox.classList.remove('hidden');
     }
@@ -325,7 +364,17 @@
                 showError('Empty response received from server.');
             }
 
-            renderMediaAttachments(data.sources || []);
+            const mergedSources = [
+                ...(Array.isArray(data.sources) ? data.sources : []),
+                ...(Array.isArray(data.standaloneFiles) ? data.standaloneFiles.map(sf => ({
+                    title: sf.filename || String(sf.relative_path || '').split('/').pop(),
+                    file: sf.relative_path || null,
+                    is_files2: true,
+                })) : []),
+            ];
+            renderMediaAttachments(mergedSources);
+
+
         } catch (err) {
             removePendingBubble();
             if (err.name === 'AbortError') {

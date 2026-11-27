@@ -21,6 +21,7 @@ class ContentChatV2Controller extends Controller
         $this->chatService = $chatService;
     }
 
+
     public function index(Request $request): View|RedirectResponse|JsonResponse
     {
         $sessionKey = 'neuron_content_chat_v2_thread_id';
@@ -30,16 +31,18 @@ class ContentChatV2Controller extends Controller
             if ($oldThreadId !== '') {
                 $this->chatService->clearThread($oldThreadId);
             }
+            $request->session()->forget('neuron_content_chat_v2_standalone_files_' . md5($oldThreadId));
 
             $newThreadId = 'content-chat-v2-' . Str::uuid();
             $request->session()->put($sessionKey, $newThreadId);
 
             if ($request->expectsJson() || $request->ajax()) {
                 return $this->cleanJsonResponse([
-                    'ok'       => true,
-                    'threadId' => $newThreadId,
-                    'messages' => [],
-                    'sources'  => [],
+                    'ok'              => true,
+                    'threadId'        => $newThreadId,
+                    'messages'        => [],
+                    'sources'         => [],
+                    'standaloneFiles' => [],
                 ]);
             }
 
@@ -52,8 +55,10 @@ class ContentChatV2Controller extends Controller
             $request->session()->put($sessionKey, $threadId);
         }
 
+        $filesSessionKey = 'neuron_content_chat_v2_standalone_files_' . md5($threadId);
         $reply = null;
         $sources = [];
+        $standaloneFiles = (array) $request->session()->get($filesSessionKey, []);
         $modelUsed = null;
 
         if ($request->isMethod('post')) {
@@ -92,6 +97,9 @@ class ContentChatV2Controller extends Controller
 
             $reply = $this->sanitizeUtf8(trim((string) ($payload['reply'] ?? '')));
             $sources = $this->sanitizeUtf8($payload['sources'] ?? []);
+            // here perter: keep standalone files2 separate from DB/tool sources in Chat V2 responses
+            $standaloneFiles = $this->sanitizeUtf8($payload['standaloneFiles'] ?? []);
+            $request->session()->put($filesSessionKey, $standaloneFiles);
             $modelUsed = $this->sanitizeUtf8($payload['modelUsed'] ?? $requestedModel);
             $messages = $payload['messages'];
             $formattedMessages = $this->formatMessagesForJson($messages);
@@ -102,12 +110,13 @@ class ContentChatV2Controller extends Controller
 
             if ($request->expectsJson() || $request->ajax()) {
                 return $this->cleanJsonResponse([
-                    'ok'        => true,
-                    'threadId'  => $payload['threadId'],
-                    'modelUsed' => $modelUsed,
-                    'reply'     => $reply,
-                    'sources'   => $sources,
-                    'messages'  => $formattedMessages,
+                    'ok'              => true,
+                    'threadId'        => $payload['threadId'],
+                    'modelUsed'       => $modelUsed,
+                    'reply'           => $reply,
+                    'sources'         => $sources,
+                    'standaloneFiles' => $standaloneFiles,
+                    'messages'        => $formattedMessages,
                 ]);
             }
         } else {
@@ -115,11 +124,12 @@ class ContentChatV2Controller extends Controller
         }
 
         return view('public.chat-v2', [
-            'threadId'  => $threadId,
-            'messages'  => $messages,
-            'reply'     => $reply,
-            'sources'   => $sources,
-            'modelUsed' => $modelUsed,
+            'threadId'        => $threadId,
+            'messages'        => $messages,
+            'reply'           => $reply,
+            'sources'         => $sources,
+            'standaloneFiles' => $standaloneFiles,
+            'modelUsed'       => $modelUsed,
         ]);
     }
 

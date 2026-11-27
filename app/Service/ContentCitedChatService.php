@@ -32,12 +32,16 @@ class ContentCitedChatService
      *     messages: Collection<int, NeuronChatMessage>
      * }
      */
+
     public function sendMessage(string $threadId, string $message, ?string $requestedModel = null): array
     {
         $startTime = microtime(true);
         $this->agent->setThreadId($threadId);
 
         CachedSearchContentsTool::resetCapturedSources();
+
+        // here perter: scan uploads/content/files2 for standalone files matching the chat message
+        $standaloneFiles = $this->findStandaloneFilesForChat($message);
 
         $primaryModel = $requestedModel
             ?: (string) config('central.chat_model', config('central.default_model', 'gemini-1.5-pro'));
@@ -55,7 +59,8 @@ class ContentCitedChatService
         }
 
         $candidates = $firstFallback ? [$primaryModel, $firstFallback] : [$primaryModel];
-        $userMessage = new UserMessage($message);
+        $enrichedMessage = $this->buildMessageWithStandaloneFiles($message, $standaloneFiles);
+        $userMessage = new UserMessage($enrichedMessage);
 
         Log::info('ChatV2 start', [
             'thread_id'  => $threadId,
@@ -120,11 +125,12 @@ class ContentCitedChatService
         ]);
 
         return [
-            'threadId'  => $threadId,
-            'reply'     => $replyText,
-            'modelUsed' => $usedModel,
-            'sources'   => $sources,
-            'messages'  => $messages,
+            'threadId'        => $threadId,
+            'reply'           => $replyText,
+            'modelUsed'       => $usedModel,
+            'sources'         => $sources,
+            'standaloneFiles' => $standaloneFiles,
+            'messages'        => $messages,
         ];
     }
 
@@ -265,4 +271,70 @@ class ContentCitedChatService
 
         return trim($text);
     }
+
+// here perter: scan uploads/content/files2 for standalone files matching the chat message
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function findStandaloneFilesForChat(string $message, int $maxInlineBytes = 10485760): array
+    {
+        $clean = trim($message);
+        if ($clean === '') {
+            return [];
+        }
+
+        $terms = preg_split('/\s+/u', $clean, -1, PREG_SPLIT_NO_EMPTY) ?: [$clean];
+        $searchTerms = array_values(array_unique(array_filter(array_merge([$clean], $terms))));
+
+        if (!app()->bound(ContentSearchService::class)) {
+            return [];
+        }
+
+        $searchService = app(ContentSearchService::class);
+        $ref = new \ReflectionMethod($searchService, 'findMatchingStoredFiles');
+        $ref->setAccessible(true);
+
+        $allMatches = $ref->invoke($searchService, $searchTerms, $maxInlineBytes);
+        if (!is_array($allMatches)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $allMatches,
+            static fn (array $f): bool => ($f['is_files2'] ?? false) === true
+        ));
+    }
+
+    // here perter: append extracted standalone files2 text into the chat prompt without altering DB sources
+    /**
+     * @param  array<int, array<string, mixed>>  $standaloneFiles
+     */
+    protected function buildMessageWithStandaloneFiles(string $message, array $standaloneFiles): string
+    {
+        if (empty($standaloneFiles)) {
+            return $message;
+        }
+
+        $blocks = ["=== STANDALONE FILES CONTEXT (uploads/content/files2) ==="];
+
+        foreach ($standaloneFiles as $idx => $file) {
+            $num = $idx + 1;
+            $name = (string) ($file['filename'] ?? 'file');
+            $rel = (string) ($file['relative_path'] ?? '');
+            $excerpt = (string) ($file['excerpt'] ?? '');
+
+            $blocks[] = "[File #{$num}: {$name} ({$rel})]";
+            if ($excerpt !== '') {
+                $blocks[] = mb_substr($excerpt, 0, 3000);
+            }
+        }
+
+        $blocks[] = "=== USER MESSAGE ===\n{$message}";
+
+        return implode("\n\n", $blocks);
+    }
+
+
+
+
 }
